@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blackjack — Single‑File Game</title>
+  <style>
+    :root {
+      --bg: #0b1323;
+      --felt: #0e3d2f;
+      --accent: #16d2a5;
+      --muted: #9aa4b2;
+      --text: #ecf0f3;
+      --danger: #ff5d5d;
+      --win: #49e07a;
+      --chip-5: #f7c948;
+      --chip-25: #49ccf9;
+      --chip-100: #d96df0;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif; background: radial-gradient(1000px 600px at 50% -10%, #173b2e, var(--bg)); color:var(--text); display:flex; justify-content:center; align-items:center; min-height:100vh; }
+    .game { width:min(1100px,95%); background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)); border-radius:16px; overflow:hidden; box-shadow:0 6px 28px rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.08); }
+
+    .header, .footer { background:rgba(0,0,0,0.35); padding:12px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .title { font-weight:800; font-size:20px; letter-spacing:.4px; }
+    .message { font-size:14px; color:var(--muted); min-height:18px; }
+
+    .table { padding:20px; background: radial-gradient(900px 400px at 50% -120px, rgba(255,255,255,0.08), transparent), var(--felt); }
+    .hand { margin-bottom:20px; border:1px dashed rgba(255,255,255,0.14); border-radius:12px; padding:12px; background: rgba(0,0,0,0.06); }
+    .hand h3 { margin:0 0 8px 0; font-size:16px; color:#d9f8ee; }
+    .cards { display:flex; gap:10px; flex-wrap:wrap; min-height:102px; }
+
+    .controls { background:rgba(255,255,255,0.05); padding:15px; border-top:1px solid rgba(255,255,255,0.1); }
+    .actions, .betting { margin:10px 0; display:flex; gap:10px; flex-wrap:wrap; }
+
+    button { padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-weight:700; letter-spacing:.2px; background:rgba(255,255,255,0.06); color:var(--text); border:1px solid rgba(255,255,255,0.14); transition: transform .06s ease, background .16s ease; }
+    button:hover { background:rgba(255,255,255,0.12); }
+    button:active { transform: translateY(1px); }
+    button.primary { background:var(--accent); color:#05221f; border-color:transparent; }
+    button.danger { background:var(--danger); color:#1a0b0b; border-color:transparent; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+
+    .step-guide { margin-bottom:10px; font-size:14px; font-weight:700; color:#fff; }
+    .highlight { background:rgba(255,255,255,0.15); padding:4px 8px; border-radius:6px; }
+
+    .chip { border-radius:999px; padding:10px 12px; font-weight:800; }
+    .chip[data-value="5"] { background: var(--chip-5); color: #221a00; }
+    .chip[data-value="25"] { background: var(--chip-25); color: #071c28; }
+    .chip[data-value="100"] { background: var(--chip-100); color: #240031; }
+
+    /* Last result badge */
+    .last-result { margin:6px 0 2px; font-weight:700; min-height: 26px; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.2); }
+    .badge.win { background:rgba(73,224,122,0.15); border-color:rgba(73,224,122,0.35); color:#9ef0b6; }
+    .badge.lose { background:rgba(255,93,93,0.15); border-color:rgba(255,93,93,0.35); color:#ffb3b3; }
+    .badge.push { background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.25); color:#e9eef0; }
+
+    /* Card visuals (minimal — most styles inline for hidden/back handling) */
+    .card { width:68px; height:98px; border-radius:10px; background:#fff; color:#111; display:grid; grid-template-rows:auto 1fr auto; padding:8px; box-shadow:0 6px 14px rgba(0,0,0,0.35); }
+    .card.red { color:#c2185b; }
+    .card.back { background: repeating-linear-gradient(45deg, #0b6b5e, #0b6b5e 8px, #0a5d52 8px, #0a5d52 16px); border: 2px solid #eafaf6; color: transparent; }
+
+    details.tests { background: rgba(0,0,0,0.35); border-top:1px solid rgba(255,255,255,0.1); padding:10px 16px; }
+    details.tests summary { cursor:pointer; font-weight:700; }
+    #testOutput { background: #0f1525; color:#d6f0ff; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); max-height:220px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <div class="game">
+    <div class="header">
+      <div class="title">Blackjack</div>
+      <div class="message" id="message">Step 1: Place your bet below.</div>
+      <div class="stat">Bankroll: <b id="bankroll">$1000</b> | Bet: <b id="bet">$0</b></div>
+    </div>
+
+    <div class="table">
+      <div class="hand">
+        <h3>Dealer: <span id="dealerPoints"></span></h3>
+        <div class="cards" id="dealerCards"></div>
+      </div>
+
+      <div class="hand">
+        <h3>Player: <span id="playerPoints"></span></h3>
+        <div class="cards" id="playerCards"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="step-guide" id="stepGuide">➡️ <span class="highlight">Step 1: Place a bet</span> → Step 2: Deal → Step 3: Hit/Stand/Double</div>
+      <div class="last-result" id="lastResult"></div>
+
+      <div class="betting">
+        <button class="chip" data-value="5">+$5</button>
+        <button class="chip" data-value="25">+$25</button>
+        <button class="chip" data-value="100">+$100</button>
+        <button id="clearBetBtn">Clear Bet</button>
+      </div>
+
+      <div class="actions">
+        <button id="dealBtn" class="primary">Step 2: Deal</button>
+        <button id="hitBtn" disabled>Hit</button>
+        <button id="standBtn" disabled>Stand</button>
+        <button id="doubleBtn" disabled>Double</button>
+        <button id="newRoundBtn" style="display:none">New Round</button>
+        <button id="resetBankBtn" class="danger">Reset Bank</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      Dealer stands on all 17. Blackjack pays 3:2. Use buttons in order → Bet → Deal → Play.
+    </div>
+
+    <details class="tests">
+      <summary>Developer Tests (click to expand)</summary>
+      <div style="margin:8px 0 12px 0; display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="runTestsBtn">Run Built‑in Tests</button>
+        <span style="font-size:12px; color:var(--muted);">Results print below and to the console.</span>
+      </div>
+      <pre id="testOutput"></pre>
+    </details>
+  </div>
+
+  <script>
+  // Full game logic wired to the current UI
+  (function(){
+    const messageEl = document.getElementById('message');
+    const stepGuide = document.getElementById('stepGuide');
+    const lastResultEl = document.getElementById('lastResult');
+    const betEl = document.getElementById('bet');
+    const bankrollEl = document.getElementById('bankroll');
+
+    const dealerCardsEl = document.getElementById('dealerCards');
+    const playerCardsEl = document.getElementById('playerCards');
+    const dealerPointsEl = document.getElementById('dealerPoints');
+    const playerPointsEl = document.getElementById('playerPoints');
+
+    const dealBtn = document.getElementById('dealBtn');
+    const hitBtn = document.getElementById('hitBtn');
+    const standBtn = document.getElementById('standBtn');
+    const doubleBtn = document.getElementById('doubleBtn');
+    const newRoundBtn = document.getElementById('newRoundBtn');
+    const resetBankBtn = document.getElementById('resetBankBtn');
+    const clearBetBtn = document.getElementById('clearBetBtn');
+    const chipButtons = Array.from(document.querySelectorAll('.chip'));
+
+    // Test UI
+    const runTestsBtn = document.getElementById('runTestsBtn');
+    const testOutputEl = document.getElementById('testOutput');
+
+    let bankroll = 1000;
+    let bet = 0;
+    let deck = [];
+    let player = [];
+    let dealer = [];
+    let roundActive = false;
+    let dealerHoleRevealed = false;
+
+    const BLACKJACK = 21;
+
+    function updateBetDisplay(){
+      betEl.textContent = `$${bet}`;
+      bankrollEl.textContent = `$${bankroll}`;
+      if (roundActive) return; // during a round, stepper handled by setControls
+      if (bet > 0) {
+        stepGuide.innerHTML = `Step 1: Place a bet ✔️ → <span class="highlight">Step 2: Deal</span> → Step 3: Hit/Stand/Double`;
+        messageEl.textContent = 'Now click Deal to start the round.';
+      } else {
+        stepGuide.innerHTML = `➡️ <span class="highlight">Step 1: Place a bet</span> → Step 2: Deal → Step 3: Hit/Stand/Double`;
+        messageEl.textContent = 'Step 1: Place your bet below.';
+      }
+      dealBtn.disabled = bet <= 0;
+    }
+
+    // ===== Deck & Hand Helpers =====
+    const suits = ['♠','♥','♦','♣'];
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+    function cardValue(rank){
+      if (rank==='A') return 11;
+      if (['K','Q','J'].includes(rank)) return 10;
+      return parseInt(rank,10);
+    }
+
+    function createDeck(){
+      const d=[];
+      for (const s of suits){
+        for (const r of ranks){ d.push({rank:r, suit:s, value:cardValue(r)}); }
+      }
+      return d;
+    }
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+    function initDeck(){ deck = shuffle(createDeck()); }
+
+    function dealCard(to, hidden=false){ if (deck.length===0) initDeck(); const c = deck.pop(); if(hidden) c.hidden=true; to.push(c); return c; }
+
+    function handTotal(hand, revealAll=false){
+      let total=0, aces=0;
+      for (const c of hand){ if (c.hidden && !revealAll) continue; total += c.value; if (c.rank==='A') aces++; }
+      while (total>21 && aces>0){ total -= 10; aces--; }
+      const hardTotal = hand.reduce((t,c)=>t + ((c.hidden && !revealAll)?0:(c.rank==='A'?1:c.value)),0);
+      const soft = (total !== hardTotal);
+      return { total, soft };
+    }
+
+    function renderCard(card, reveal=false){
+      const d = document.createElement('div');
+      const showBack = card.hidden && !reveal;
+      d.className = 'card' + ((card.suit==='♥'||card.suit==='♦')?' red':'');
+      if (showBack){ d.classList.add('back'); return d; }
+      d.innerHTML = `<div class="rank" style="font-weight:700;font-size:18px;">${card.rank}</div><div class="suit-large" style="font-size:28px;place-self:center;opacity:0.9;">${card.suit}</div><div class="suit" style="font-size:14px;justify-self:end;">${card.suit}</div>`;
+      return d;
+    }
+
+    function renderHands(){
+      dealerCardsEl.innerHTML='';
+      playerCardsEl.innerHTML='';
+      for(const c of dealer) dealerCardsEl.appendChild(renderCard(c, dealerHoleRevealed));
+      for(const c of player) playerCardsEl.appendChild(renderCard(c));
+      const dp = handTotal(dealer, dealerHoleRevealed);
+      const pp = handTotal(player, true);
+      dealerPointsEl.textContent = dealerHoleRevealed ? labelPoints(dp) : '';
+      playerPointsEl.textContent = labelPoints(pp);
+    }
+
+    function labelPoints({total, soft}){ return soft && total<=21 ? `${total} (soft)` : `${total}`; }
+
+    // ===== Round Flow =====
+    function setControls(state){
+      // state: 'betting'|'player'|'dealer'|'roundEnd'
+      switch(state){
+        case 'betting':
+          dealBtn.disabled = bet<=0;
+          hitBtn.disabled = true; standBtn.disabled = true; doubleBtn.disabled = true;
+          newRoundBtn.style.display='none';
+          clearBetBtn.disabled=false; chipButtons.forEach(b=>b.disabled=false);
+          stepGuide.innerHTML = bet>0 ? `Step 1: Place a bet ✔️ → <span class="highlight">Step 2: Deal</span> → Step 3: Hit/Stand/Double` : `➡️ <span class="highlight">Step 1: Place a bet</span> → Step 2: Deal → Step 3: Hit/Stand/Double`;
+          messageEl.textContent = bet>0 ? 'Now click Deal to start the round.' : 'Step 1: Place your bet below.';
+          break;
+        case 'player':
+          dealBtn.disabled = true;
+          hitBtn.disabled = false; standBtn.disabled = false; doubleBtn.disabled = !(player.length===2 && bankroll>=bet);
+          newRoundBtn.style.display='none';
+          clearBetBtn.disabled=true; chipButtons.forEach(b=>b.disabled=true);
+          stepGuide.innerHTML = `Step 1: Place a bet ✔️ → Step 2: Deal ✔️ → <span class="highlight">Step 3: Hit/Stand/Double</span>`;
+          messageEl.textContent = 'Choose: Hit, Stand, or Double.';
+          break;
+        case 'dealer':
+          dealBtn.disabled=true; hitBtn.disabled=true; standBtn.disabled=true; doubleBtn.disabled=true;
+          newRoundBtn.style.display='none';
+          stepGuide.innerHTML = `Step 1: ✔️ → Step 2: ✔️ → Step 3: ✔️`;
+          break;
+        case 'roundEnd':
+          // After result, require explicit New Round before dealing again
+          dealBtn.disabled=true; hitBtn.disabled=true; standBtn.disabled=true; doubleBtn.disabled=true;
+          newRoundBtn.style.display='inline-block';
+          clearBetBtn.disabled=false; chipButtons.forEach(b=>b.disabled=false);
+          // stepGuide updated in settleRound with winner badge; keep here succinct
+          messageEl.textContent = 'Round finished. Click New Round to start again.';
+          break;
+      }
+    }
+
+    function startRound(){
+      // Clear last result when a new hand starts
+      lastResultEl.innerHTML = '';
+
+      if (bet<=0) { messageEl.textContent='You need to place a bet first!'; return; }
+      if (bankroll < bet) { messageEl.textContent='Not enough bankroll for that bet.'; return; }
+      if (deck.length < 12) initDeck();
+
+      roundActive = true; dealerHoleRevealed=false; player=[]; dealer=[];
+      bankroll -= bet; updateBetDisplay();
+
+      dealCard(player); dealCard(dealer); // upcards
+      dealCard(player); dealCard(dealer,true); // dealer hole
+      renderHands();
+
+      // Check blackjacks (dealer peek)
+      const pTot = handTotal(player,true).total;
+      const dTot = handTotal(dealer,true).total; // peeking value
+      if (dTot===21 && dealer.length===2){
+        dealerHoleRevealed=true; renderHands();
+        return settleRound();
+      }
+      if (pTot===21 && player.length===2){
+        dealerHoleRevealed=true; renderHands();
+        return settleRound('player-blackjack');
+      }
+
+      setControls('player');
+    }
+
+    function playerHit(){
+      if (!roundActive) return;
+      dealCard(player); renderHands();
+      const { total } = handTotal(player,true);
+      if (total>21){ dealerHoleRevealed=true; renderHands(); return settleRound(); }
+      // Once you hit, no double
+      doubleBtn.disabled = true;
+    }
+
+    function playerStand(){
+      if (!roundActive) return;
+      dealerHoleRevealed = true; // reveal dealer's hole card when player stands
+      renderHands();
+      setControls('dealer');
+      dealerPlay();
+    }
+
+    function playerDouble(){
+      if (!roundActive || player.length!==2 || bankroll<bet) return;
+      bankroll -= bet; bet*=2; updateBetDisplay();
+      dealCard(player); renderHands();
+      const {total}=handTotal(player,true);
+      if (total>21){ dealerHoleRevealed=true; renderHands(); return settleRound(); }
+      playerStand();
+    }
+
+    function dealerPlay(){
+      const tick = ()=>{
+        const { total } = handTotal(dealer,true);
+        if (total < 17) { dealCard(dealer); renderHands(); setTimeout(tick,500); }
+        else { settleRound(); }
+      };
+      setTimeout(tick, 450);
+    }
+
+    function settleRound(force){
+      // Compute outcome and settle bankroll
+      const pv = handTotal(player,true).total;
+      const dv = handTotal(dealer,true).total;
+
+      let outcome='', outcomeText='', outcomeClass='';
+      if (force==='player-blackjack') {
+        bankroll += Math.floor(bet + bet*1.5); // 3:2 payout
+        outcome='win'; outcomeText='Blackjack! You win 3:2.'; outcomeClass='win';
+      } else if (pv>BLACKJACK) {
+        outcome='lose'; outcomeText=`Bust (${pv}). Dealer wins.`; outcomeClass='lose';
+      } else if (dv>BLACKJACK) {
+        bankroll += bet*2; outcome='win'; outcomeText=`Dealer busts (${dv}). You win!`; outcomeClass='win';
+      } else if (pv>dv) {
+        bankroll += bet*2; outcome='win'; outcomeText=`You win ${pv} vs ${dv}.`; outcomeClass='win';
+      } else if (pv<dv) {
+        outcome='lose'; outcomeText=`Dealer wins ${dv} vs ${pv}.`; outcomeClass='lose';
+      } else {
+        bankroll += bet; outcome='push'; outcomeText=`Push ${pv} vs ${dv}. Bet returned.`; outcomeClass='push';
+      }
+
+      bankrollEl.textContent = `$${bankroll}`;
+      messageEl.textContent = outcomeText;
+
+      // Persist winner badge into New Round / Betting states until the next deal
+      lastResultEl.innerHTML = `<span class="badge ${outcomeClass}">${outcome === 'win' ? 'Player won' : outcome === 'lose' ? 'Dealer won' : 'Push'}</span>`;
+      stepGuide.innerHTML = `Round complete — <span class="highlight">${outcome === 'win' ? 'Player won' : outcome === 'lose' ? 'Dealer won' : 'Push'}</span>. Click <b>New Round</b> to play again.`;
+
+      roundActive=false;
+      setControls('roundEnd');
+    }
+
+    function newRound(){
+      player=[]; dealer=[]; dealerHoleRevealed=false; renderHands();
+      messageEl.textContent='Step 1: Adjust your bet, then click Deal to play again.';
+      setControls('betting');
+    }
+
+    // ===== Wiring =====
+    chipButtons.forEach(btn=>btn.addEventListener('click',()=>{ bet += parseInt(btn.dataset.value,10); updateBetDisplay(); setControls('betting'); }));
+    clearBetBtn.addEventListener('click', ()=>{ bet=0; updateBetDisplay(); setControls('betting'); });
+    resetBankBtn.addEventListener('click', ()=>{ bankroll=1000; updateBetDisplay(); messageEl.textContent='Bankroll reset to $1000.'; });
+
+    dealBtn.addEventListener('click', startRound);
+    hitBtn.addEventListener('click', playerHit);
+    standBtn.addEventListener('click', playerStand);
+    doubleBtn.addEventListener('click', playerDouble);
+    newRoundBtn.addEventListener('click', newRound);
+
+    document.addEventListener('keydown', (e)=>{
+      if (e.key.toLowerCase()==='h' && !hitBtn.disabled) playerHit();
+      if (e.key.toLowerCase()==='s' && !standBtn.disabled) playerStand();
+      if (e.key.toLowerCase()==='d' && !doubleBtn.disabled) playerDouble();
+    });
+
+    // ===== Developer Tests =====
+    function makeCard(rank, suit){ return { rank, suit, value: cardValue(rank) }; }
+    function setDeckBySequence(seq){ deck = seq.slice().reverse(); }
+    function assert(name, cond){ const line = `${cond? '✅':'❌'} ${name}`; console[cond? 'log':'error'](line); testOutputEl.textContent += line + "\n"; }
+    function resetForTest(){ bankroll=1000; bet=100; updateBetDisplay(); player=[]; dealer=[]; dealerHoleRevealed=false; roundActive=false; lastResultEl.innerHTML=''; }
+
+    function runTests(){
+      testOutputEl.textContent='';
+
+      // Test 1: Player blackjack wins 3:2 (dealer not blackjack)
+      resetForTest();
+      // Sequence of future cards dealt: P1, D1, P2, D(hole)
+      setDeckBySequence([
+        makeCard('A','♠'), makeCard('9','♦'), makeCard('K','♣'), makeCard('7','♥')
+      ]);
+      dealBtn.disabled=false; startRound();
+      assert('T1: Round should end immediately on BJ', !roundActive);
+      assert('T1: Bankroll should be 1000 - 100 + 150 = 1050', bankroll===1050);
+      assert('T1: Last result badge says Player won', /Player won/.test(lastResultEl.textContent));
+
+      // Test 2: Dealer blackjack beats player 20
+      resetForTest();
+      setDeckBySequence([
+        makeCard('10','♠'), makeCard('A','♥'), makeCard('Q','♣'), makeCard('J','♦') // dealer has A+J
+      ]);
+      startRound();
+      assert('T2: Dealer BJ ends round', !roundActive);
+      assert('T2: Bankroll should be 900 after loss', bankroll===900);
+      assert('T2: Last result badge says Dealer won', /Dealer won/.test(lastResultEl.textContent));
+
+      // Test 3: Player hits and busts
+      resetForTest();
+      // Cards: P1=10, D1=6, P2=9, D(h)=5, then next hit card=5 -> bust 24
+      setDeckBySequence([
+        makeCard('10','♣'), makeCard('6','♠'), makeCard('9','♦'), makeCard('5','♥'), makeCard('5','♣')
+      ]);
+      startRound();
+      playerHit();
+      assert('T3: Player busts -> round ends', !roundActive);
+      assert('T3: Bankroll 900 after loss', bankroll===900);
+
+      // Test 4: Stand reveals hole card and dealer draws/stops
+      resetForTest();
+      // P: 9,8 =17 ; D: 6 + hole 9 =15 then draws 2 -> 17 -> push
+      setDeckBySequence([
+        makeCard('9','♣'), makeCard('6','♣'), makeCard('8','♦'), makeCard('9','♥'), makeCard('2','♠')
+      ]);
+      startRound();
+      playerStand();
+      assert('T4: Dealer hole revealed on Stand', dealerHoleRevealed===true);
+      assert('T4: Round ends in push', /Push/.test(lastResultEl.textContent));
+      assert('T4: Bankroll unchanged (1000)', bankroll===1000);
+
+      // Test 5: Deal disabled after round end until New Round
+      resetForTest();
+      setDeckBySequence([
+        makeCard('9','♣'), makeCard('6','♣'), makeCard('8','♦'), makeCard('9','♥'), makeCard('2','♠')
+      ]);
+      startRound();
+      playerStand();
+      assert('T5: After round end, Deal is disabled', dealBtn.disabled===true);
+      newRound();
+      assert('T5: After New Round, Deal enabled only if bet>0', dealBtn.disabled===false);
+
+      testOutputEl.textContent += "\nAll tests completed.";
+    }
+
+    // Expose tests in UI
+    runTestsBtn.addEventListener('click', runTests);
+
+    // Boot
+    initDeck();
+    renderHands();
+    updateBetDisplay();
+    chipButtons.forEach(b=>b.disabled=false);
+    clearBetBtn.disabled=false;
+    setControls('betting');
+  })();
+  </script>
+</body>
+</html>
